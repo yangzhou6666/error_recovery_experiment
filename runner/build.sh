@@ -25,7 +25,7 @@ if [ ! -f java_parser_cpctplus ]; then
     git reset --hard
     patch -p0 < ../print_budget.patch
     cd ../java_parser
-    sed -Ei "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
+    sed -Ei '' "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
     rm -rf target
     cargo build --release
     cp target/release/java_parser ../java_parser_cpctplus
@@ -38,7 +38,7 @@ if [ ! -f java_parser_cpctplus_rev ]; then
     patch -p0 < ../print_budget.patch
     patch -p0 < ../rev_rank.patch
     cd ../java_parser
-    sed -Ei "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
+    sed -Ei '' "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
     rm -rf target
     cargo build --release
     cp target/release/java_parser ../java_parser_cpctplus_rev
@@ -49,7 +49,7 @@ if [ ! -f java_parser_none ]; then
     cd grmtools
     git reset --hard
     cd ../java_parser
-    sed -Ei "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::None)/" build.rs
+    sed -Ei '' "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::None)/" build.rs
     rm -rf target
     cargo build --release
     cp target/release/java_parser ../java_parser_none
@@ -61,7 +61,7 @@ if [ ! -f java_parser_panic ]; then
     git reset --hard
     patch -p0 < ../print_budget.patch
     cd ../java_parser
-    sed -Ei "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::Panic)/" build.rs
+    sed -Ei '' "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::Panic)/" build.rs
     rm -rf target
     cargo build --release
     cp target/release/java_parser ../java_parser_panic
