@@ -38,7 +38,7 @@ if [ ! -f java_parser_cpctplus_dontmerge ]; then
     patch -p0 < ../print_budget.patch
     patch -p0 < ../dontmerge.patch
     cd ../java_parser
-    sed -Ei "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
+    sed -Ei '' "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
     rm -rf target
     cargo build --release
     cp target/release/java_parser ../java_parser_cpctplus_dontmerge
@@ -64,7 +64,7 @@ if [ ! -f java_parser_cpctplus_longer ]; then
     patch -p0 < ../longer_budget.patch
     patch -p0 < ../print_budget.patch
     cd ../java_parser
-    sed -Ei "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
+    sed -Ei '' "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
     rm -rf target
     cargo build --release
     cp target/release/java_parser ../java_parser_cpctplus_longer
@@ -101,7 +101,7 @@ if [ ! -f java_parser_corchuelo ]; then
     patch -p0 < ../dontmerge.patch
     patch -p0 < ../corchuelo.patch
     cd ../java_parser
-    sed -Ei "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
+    sed -Ei '' "s/RecoveryKind::[a-zA-Z_]*[)]/RecoveryKind::CPCTPlus)/" build.rs
     rm -rf target
     cargo build --release
     cp target/release/java_parser ../java_parser_corchuelo
