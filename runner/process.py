@@ -23,7 +23,7 @@ SRC_FILES_DIR = "../blackbox/src_files"
 BOOTSTRAP = 10000
 HISTOGRAM_BINS = 75
 ERROR_LOCS_HISTOGRAM_BINS = 50
-MAX_RECOVERY_TIME = 0.5 # Seconds
+RECOVERY_BUDGET = 0.5 # Seconds
 
 class PExec:
     def __init__(self,
@@ -132,10 +132,8 @@ class Results:
             costs = []
             for pexecs in self.pexecs:
                 pexec = random.choice(pexecs)
-                if pexec.succeeded:
-                    costs.extend(pexec.costs)
-            if len(costs) > 0:
-                out.append(mean(costs))
+                costs.extend(pexec.costs)
+            out.append(mean(costs))
         return out
 
     def bootstrap_input_skipped(self):
@@ -192,8 +190,8 @@ def process(latex_name, p):
                 assert s[3] == "0"
                 succeeded = False
             costs = [int(x) for x in s[5].split(":") if x != ""]
-            if latex_name != "\\panic" and succeeded and len(costs) == 0:
-                print "Warning: %s (pexec #%s) succeeded without parsing errors" % (s[0], s[1])
+            if latex_name not in ["\\corchuelo", "\\panic"] and succeeded and len(costs) == 0:
+                print "Warning: %s (pexec #%s of %s) succeeded without parsing errors" % (s[0], s[1], latex_name)
                 continue
             pexec = PExec(s[0], int(s[1]), float(s[2]), succeeded, int(s[4]), costs, int(s[6]), int(s[7]))
             max_run_num = max(max_run_num, pexec.run_num)
@@ -210,11 +208,11 @@ def corpus_size():
         num_files += 1
     return num_files, size_bytes
 
-def time_histogram(run, p):
+def time_histogram(run, p, budget = RECOVERY_BUDGET):
     bbins = [[] for _ in range(HISTOGRAM_BINS)]
     for _ in range(BOOTSTRAP):
         d = [float(random.choice(pexecs).recovery_time) for pexecs in run.pexecs]
-        hbins, _ = histogram(d, bins=HISTOGRAM_BINS, range=(0, MAX_RECOVERY_TIME))
+        hbins, _ = histogram(d, bins=HISTOGRAM_BINS, range=(0, budget))
         for i, cnt in enumerate(hbins):
             bbins[i].append(cnt)
 
@@ -236,6 +234,7 @@ def time_histogram(run, p):
     fig, ax = plt.subplots(figsize=(8, 4))
     plt.bar(range(HISTOGRAM_BINS), bins, yerr=errs, align="center", log=True, color="#777777", \
             error_kw={"ecolor": "black", "elinewidth": 1, "capthick": 0.5, "capsize": 1})
+    plt.yscale('symlog')
     ax.set_xlabel('Recovery time (s)')
     ax.set_ylabel('Number of files (log$_{10}$)')
     ax.grid(linewidth=0.25)
@@ -243,20 +242,33 @@ def time_histogram(run, p):
     ax.spines['top'].set_visible(False)
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
+    ax.yaxis.set_tick_params(which='minor', size=0)
+    ax.yaxis.set_tick_params(which='minor', width=0)
     plt.xlim(xmin=-.2, xmax=HISTOGRAM_BINS)
-    plt.ylim(ymax=len(run.pexecs))
+    plt.ylim(ymin=0, ymax=len(run.pexecs))
     locs = []
     labs = []
-    for i in range(0, 6):
-        locs.append((HISTOGRAM_BINS / 5) * i - 0.5)
-        labs.append(i / 10.0)
+    if budget <= 0.5:
+        num_labs = 5
+    else:
+        num_labs = 8
+    for i in range(0, num_labs + 1):
+        locs.append((HISTOGRAM_BINS / float(num_labs)) * i - 0.5)
+        labs.append(i / (float(num_labs) / budget))
     plt.xticks(locs, labs)
-    yticks = []
+    ylocs = []
+    ylabs = []
     i = len(run.pexecs)
-    while i >= 10:
-        yticks.append(i)
+    while True:
+        if i < 1:
+            ylocs.append(0)
+            ylabs.append(0)
+            break
+        else:
+            ylocs.append(i)
+            ylabs.append(i)
         i /= 10
-    plt.yticks(yticks, [str(x) for x in yticks])
+    plt.yticks(ylocs, ylabs)
     formatter = ScalarFormatter()
     formatter.set_scientific(False)
     ax.yaxis.set_major_formatter(formatter)
@@ -284,7 +296,7 @@ def error_locs_histogram(run1, run2, p, zoom=None):
             d = []
             for pexecs in run.pexecs:
                 pexec = random.choice(pexecs)
-                if pexec.succeeded:
+                if pexec.succeeded or len(pexec.costs) > 0:
                     if zoom is None or len(pexec.costs) <= zoom:
                         d.append(len(pexec.costs))
             hbins, _ = histogram(d, bins=num_bins, range=(0, max_error_locs))
@@ -318,6 +330,11 @@ def error_locs_histogram(run1, run2, p, zoom=None):
     barlist = plt.bar(range(ERROR_LOCS_HISTOGRAM_BINS * 2), flat_zip(run1_bins, run2_bins), yerr=flat_zip(run1_errs, run2_errs), \
             align="center", log=True, color=["black", "red"], \
             error_kw={"ecolor": "black", "elinewidth": 1, "capthick": 0.5, "capsize": 1})
+
+    run1_bins = run1_errs = None
+    run2_bins = run2_errs = None
+
+    plt.yscale('symlog')
     for i in range(0, len(barlist), 2):
         barlist[i].set_color("#777777")
         barlist[i + 1].set_color("#BBBBBB")
@@ -331,20 +348,29 @@ def error_locs_histogram(run1, run2, p, zoom=None):
     ax.spines['top'].set_visible(False)
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
+    ax.yaxis.set_tick_params(which='minor', size=0)
+    ax.yaxis.set_tick_params(which='minor', width=0)
     plt.xlim(xmin=-.7, xmax=ERROR_LOCS_HISTOGRAM_BINS * 2)
-    plt.ylim(ymax=len(run1.pexecs))
+    plt.ylim(ymin=0, ymax=len(run1.pexecs))
     locs = []
     labs = []
     for i in range(0, 8):
         locs.append((ERROR_LOCS_HISTOGRAM_BINS / 7) * i * 2 - 0.5)
         labs.append(int(round((max_error_locs / 7.0) * i)))
     plt.xticks(locs, labs)
-    yticks = []
+    ylocs = []
+    ylabs = []
     i = len(run1.pexecs)
-    while i >= 10:
-        yticks.append(i)
+    while True:
+        if i < 1:
+            ylocs.append(0)
+            ylabs.append(0)
+            break
+        else:
+            ylocs.append(i)
+            ylabs.append(i)
         i /= 10
-    plt.yticks(yticks, [str(x) for x in yticks])
+    plt.yticks(ylocs, ylabs)
     formatter = ScalarFormatter()
     formatter.set_scientific(False)
     ax.yaxis.set_major_formatter(formatter)
@@ -364,8 +390,18 @@ with open("experimentstats.tex", "w") as f:
     # in an order that allows us to keep as few things in memory as we can.
     cpctplus = process("\\cpctplus", "cpctplus.csv")
 
-    # Flush some caches
+    # Flush cache
     cpctplus.bootstrapped_recovery_means = None
+
+    cpctplusdontmerge = process("\\cpctplusdontmerge", "cpctplus_dontmerge.csv")
+    assert cpctplus.num_runs == cpctplusdontmerge.num_runs
+    cpctplusdontmerge_cpctplus_ratio_ci = confidence_ratio_error_locs(cpctplusdontmerge, cpctplus)
+    f.write(r"\newcommand{\cpctplusdontmergeerrorlocsratioovercpctplus}{%.2f\%%{\footnotesize$\pm$%s\%%}\xspace}" % \
+            (cpctplusdontmerge_cpctplus_ratio_ci.median, ci_pp(cpctplusdontmerge_cpctplus_ratio_ci.error, 3)))
+    f.write("\n")
+
+    cpctplusdontmerge.bootstrapped_recovery_means = None
+    cpctplusdontmerge.bootstrapped_error_locs = None
 
     cpctplusrev = process("\\cpctplusrev", "cpctplus_rev.csv")
     assert cpctplus.num_runs == cpctplusrev.num_runs
@@ -374,6 +410,21 @@ with open("experimentstats.tex", "w") as f:
             (cpctplusrev_cpctplus_ratio_ci.median, ci_pp(cpctplusrev_cpctplus_ratio_ci.error, 3)))
     f.write("\n")
 
+    cpctplusrev.bootstrapped_recovery_means = None
+    cpctplusrev.bootstrapped_error_locs = None
+
+    cpctpluslonger = process("\\cpctpluslonger", "cpctplus_longer.csv")
+    assert cpctplus.num_runs == cpctpluslonger.num_runs
+
+    cpctpluslonger.bootstrapped_recovery_means = None
+    cpctpluslonger.bootstrapped_error_locs = None
+
+    corchuelo = process("\\corchuelo", "corchuelo.csv")
+    assert cpctplus.num_runs == corchuelo.num_runs
+
+    corchuelo.bootstrapped_recovery_means = None
+    corchuelo.bootstrapped_error_locs = None
+
     panic = process("\\panic", "panic.csv")
     assert cpctplus.num_runs == cpctplusrev.num_runs == panic.num_runs
     panic_cpctplus_ratio_ci = confidence_ratio_error_locs(panic, cpctplus)
@@ -381,11 +432,8 @@ with open("experimentstats.tex", "w") as f:
             (panic_cpctplus_ratio_ci.median, ci_pp(panic_cpctplus_ratio_ci.error, 3)))
     f.write("\n")
 
-    # Flush all caches
     cpctplus.bootstrapped_recovery_means = None
     cpctplus.bootstrapped_error_locs = None
-    cpctplusrev.bootstrapped_recovery_means = None
-    cpctplusrev.bootstrapped_error_locs = None
     panic.bootstrapped_recovery_means = None
     panic.bootstrapped_error_locs = None
 
@@ -398,7 +446,7 @@ with open("experimentstats.tex", "w") as f:
     f.write("\n")
     f.write(r"\newcommand{\corpussizemb}{\numprint{%s}\xspace}" % str(size_bytes / 1024 / 1024))
     f.write("\n")
-    for x in [cpctplus, cpctplusrev, panic]:
+    for x in [cpctplus, cpctplusdontmerge, cpctpluslonger, cpctplusrev, panic]:
         f.write(r"\newcommand{%ssuccessrate}{%.2f\%%{\footnotesize$\pm$%s\%%}\xspace}" % \
                 (x.latex_name, 100.0 - x.failure_rate_ci.median, ci_pp(x.failure_rate_ci.error, 3)))
         f.write("\n")
@@ -416,17 +464,16 @@ with open("experimentstats.tex", "w") as f:
         f.write("\n")
 
 with open("table.tex", "w") as f:
-    for x in [panic, cpctplus, cpctplusrev]:
-        if x.latex_name == "\\panic":
+    for x in [corchuelo, cpctplus, panic, cpctplusdontmerge, cpctplusrev]:
+        if x.latex_name in ["\\corchuelo", "\\panic"]:
             costs_median = "-"
             costs_ci = ""
-            failure_rate_median = "-"
-            failure_rate_ci = ""
         else:
             costs_median = "%.2f" % x.costs_ci.median
             costs_ci = "{\scriptsize$\pm$%s}" % ci_pp(x.costs_ci.error, 3)
-            failure_rate_median = "%.2f" % x.failure_rate_ci.median
-            failure_rate_ci = "{\scriptsize$\pm$%s}" % ci_pp(x.failure_rate_ci.error, 3)
+        failure_rate_median = "%.2f" % x.failure_rate_ci.median
+        failure_rate_ci = "{\scriptsize$\pm$%s}" % ci_pp(x.failure_rate_ci.error, 3)
+
         f.write("%s & %.6f & %.6f & %s & %s & %.2f & \\numprint{%d} \\\\[-4pt]\n" % \
                 (x.latex_name, \
                  x.recovery_time_mean_ci.median, \
@@ -446,18 +493,22 @@ with open("table.tex", "w") as f:
         if x.latex_name == "\\panic":
             f.write("\midrule\n")
 
+cpctplusdontmerge = None
+corchuelo = None
+panic = None
+
 sys.stdout.write("Time histograms...")
 sys.stdout.flush()
 time_histogram(cpctplus, "cpctplus_histogram.pdf")
 sys.stdout.write(" cpctplus")
 sys.stdout.flush()
-time_histogram(cpctplusrev, "cpctplusrev_histogram.pdf")
-sys.stdout.write(" cpctplusrev")
-sys.stdout.flush()
-time_histogram(panic, "panic_histogram.pdf")
-sys.stdout.write(" panic")
+time_histogram(cpctpluslonger, "cpctpluslonger_histogram.pdf", budget=2.0)
+sys.stdout.write(" cpctpluslonger")
 sys.stdout.flush()
 print
+
+cpctpluslonger = None
+
 sys.stdout.write("Error locations histogram...")
 sys.stdout.flush()
 error_locs_histogram(cpctplus, cpctplusrev, "cpctplus_cpctplusrev_error_locs_histogram_full.pdf")
